@@ -7,13 +7,7 @@ import {
   RelationId,
   PrimaryGeneratedColumn
 } from "typeorm";
-
-type JobRelation = {
-  id: string;
-  description: string;
-  keywords: string[];
-  createdAt: Date;
-};
+import type { Job } from "./Job";
 
 @Entity({ name: "resume" })
 export class Resume {
@@ -34,7 +28,7 @@ export class Resume {
 
   @ManyToOne("Job", "resumes", { onDelete: "CASCADE", eager: true })
   @JoinColumn({ name: "job_id" })
-  job!: JobRelation;
+  job!: Job;
 
   @RelationId((resume: Resume) => resume.job)
   jobId!: string;

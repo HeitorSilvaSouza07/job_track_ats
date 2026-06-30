@@ -1,10 +1,5 @@
 import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
-
-type ResumeRelation = {
-  id: string;
-  atsScore: number;
-  createdAt: Date;
-};
+import type { Resume } from "./Resume";
 
 @Entity({ name: "job" })
 export class Job {
@@ -21,5 +16,5 @@ export class Job {
   createdAt!: Date;
 
   @OneToMany("Resume", "job")
-  resumes!: ResumeRelation[];
+  resumes!: Resume[];
 }
