@@ -1,141 +1,143 @@
-const STOPWORDS = new Set([
-  "the",
-  "and",
-  "for",
-  "with",
-  "that",
-  "this",
-  "from",
-  "your",
-  "you",
-  "are",
-  "will",
-  "have",
-  "has",
-  "our",
-  "not",
-  "can",
-  "all",
-  "any",
-  "but",
-  "como",
-  "para",
-  "que",
-  "uma",
-  "por",
-  "dos",
-  "das",
-  "das",
-  "nos",
-  "nas",
-  "com",
-  "sem",
-  "sua",
-  "seu",
-  "sao"
-]);
+import { z } from "zod";
+import { createGroqChatCompletion } from "@/lib/groq";
 
-const IMPORTANT_PHRASES = [
-  "project management",
-  "stakeholder management",
-  "data analysis",
-  "software development",
-  "business intelligence",
-  "machine learning",
-  "artificial intelligence",
-  "test automation",
-  "continuous integration",
-  "continuous delivery",
-  "customer success",
-  "product strategy",
-  "frontend development",
-  "backend development",
-  "cloud architecture",
-  "rest api",
-  "typescript",
-  "next.js",
-  "postgresql",
-  "react",
-  "node.js",
-  "docker",
-  "kubernetes"
-];
+const atsAnalysisSchema = z.object({
+  keywords: z.array(z.string().min(2)).min(1),
+  matchedKeywords: z.array(z.string()),
+  missingKeywords: z.array(z.string()),
+  score: z.number().min(0).max(100),
+  summary: z.string().optional()
+});
 
-function normalizeText(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[\u2019']/g, "")
-    .replace(/[-/]+/g, " ")
-    .replace(/[^a-z0-9+\-.#\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+type AtsAnalysisInput = {
+  jobDescription: string;
+  resumeText: string;
+  existingKeywords?: string[];
+};
+
+type AtsAnalysisResult = {
+  keywords: string[];
+  matchedKeywords: string[];
+  missingKeywords: string[];
+  score: number;
+  summary?: string;
+};
+
+function normalizeList(values: string[]): string[] {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
 }
 
-function tokenize(text: string): string[] {
-  return normalizeText(text)
-    .split(" ")
-    .filter((token) => token.length > 2 && !STOPWORDS.has(token));
-}
+function extractJsonBlock(raw: string): string {
+  const trimmed = raw.trim();
 
-function buildPhrases(tokens: string[]): string[] {
-  const phrases = new Set<string>();
-
-  for (let index = 0; index < tokens.length; index += 1) {
-    const current = tokens[index];
-    if (current) {
-      phrases.add(current);
-    }
-
-    const next = tokens[index + 1];
-    const third = tokens[index + 2];
-
-    if (current && next) {
-      phrases.add(`${current} ${next}`);
-    }
-
-    if (current && next && third) {
-      phrases.add(`${current} ${next} ${third}`);
-    }
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    return trimmed;
   }
 
-  IMPORTANT_PHRASES.forEach((phrase) => phrases.add(phrase));
-  return Array.from(phrases);
-}
-
-export function extractKeywords(jobDescription: string, maxKeywords = 20): string[] {
-  const tokens = tokenize(jobDescription);
-  const counts = new Map<string, number>();
-  const phrases = buildPhrases(tokens);
-
-  for (const phrase of phrases) {
-    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const regex = new RegExp(`\\b${escaped}\\b`, "g");
-    const matches = jobDescription.toLowerCase().match(regex);
-    const frequency = matches?.length ?? 0;
-
-    if (frequency > 0 && phrase.length > 2) {
-      counts.set(phrase, frequency + (phrase.includes(" ") ? 2 : 0));
-    }
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fencedMatch?.[1]) {
+    return fencedMatch[1].trim();
   }
 
-  return Array.from(counts.entries())
-    .sort((left, right) => right[1] - left[1] || right[0].length - left[0].length)
-    .map(([keyword]) => keyword)
-    .slice(0, maxKeywords);
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    return trimmed.slice(start, end + 1);
+  }
+
+  throw new Error("Groq returned content that is not valid JSON");
 }
 
-export function analyzeATS(jobDescription: string, resumeText: string) {
-  const keywords = extractKeywords(jobDescription);
-  const normalizedResume = normalizeText(resumeText);
+function buildAnalysisPrompt(input: AtsAnalysisInput): string {
+  return [
+    "Analyze the job description and resume for ATS compatibility across any industry: operations, sales, marketing, finance, healthcare, education, logistics, administration, legal, retail, hospitality, manufacturing, and technology.",
+    "Extract the most important keywords from the job description, identify which ones appear in the resume, and rate the resume fit as a percentage.",
+    "Use only truthful matching. Do not invent skills or experience that are not present in the resume.",
+    "Return strict JSON only with the shape:",
+    '{ "keywords": string[], "matchedKeywords": string[], "missingKeywords": string[], "score": number, "summary"?: string }',
+    "Rules:",
+    "- keywords should contain the most relevant canonical ATS terms, not vague generic words.",
+    "- matchedKeywords must be a subset of keywords present in the resume.",
+    "- missingKeywords must be important keywords from the job description that are absent from the resume.",
+    "- score must reflect overall ATS fit, weighting hard skills, role-specific terms, certifications, tools, responsibilities, and required experience.",
+    "- prefer standard resume terminology that ATS parsers recognize well.",
+    "- include broad industry terms when the job is not technical.",
+    "",
+    `JOB DESCRIPTION:\n${input.jobDescription}`,
+    "",
+    `RESUME:\n${input.resumeText}`,
+    input.existingKeywords?.length
+      ? ""
+      : "If useful, infer keywords directly from the job description before scoring."
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
 
-  const matchedKeywords = keywords.filter((keyword) => normalizedResume.includes(keyword));
-  const missingKeywords = keywords.filter((keyword) => !matchedKeywords.includes(keyword));
-  const score = keywords.length === 0 ? 0 : Math.round((matchedKeywords.length / keywords.length) * 100);
+async function parseAnalysisResponse(raw: string): Promise<AtsAnalysisResult> {
+  const json = extractJsonBlock(raw);
+  const parsed = atsAnalysisSchema.parse(JSON.parse(json));
 
   return {
-    keywords,
-    matchedKeywords,
-    missingKeywords,
-    score
+    keywords: normalizeList(parsed.keywords),
+    matchedKeywords: normalizeList(parsed.matchedKeywords),
+    missingKeywords: normalizeList(parsed.missingKeywords),
+    score: Math.round(parsed.score),
+    summary: parsed.summary?.trim()
   };
+}
+
+export async function extractKeywords(jobDescription: string): Promise<string[]> {
+  const response = await createGroqChatCompletion([
+    {
+      role: "system",
+      content:
+        "You extract ATS keywords from job descriptions for any industry. Return strict JSON only."
+    },
+    {
+      role: "user",
+      content: [
+        "Return strict JSON only in the form {\"keywords\": string[]}.",
+        "Choose the most important ATS keywords, canonical terms, certifications, tools, responsibilities, and seniority signals.",
+        "Avoid vague filler words.",
+        "",
+        `JOB DESCRIPTION:\n${jobDescription}`
+      ].join("\n")
+    }
+  ]);
+
+  const parsed = z.object({ keywords: z.array(z.string().min(2)).min(1) }).parse(JSON.parse(extractJsonBlock(response)));
+  return normalizeList(parsed.keywords);
+}
+
+export async function analyzeATS(
+  jobDescription: string,
+  resumeText: string,
+  existingKeywords?: string[]
+): Promise<AtsAnalysisResult> {
+  const rawResponse = await createGroqChatCompletion([
+    {
+      role: "system",
+      content:
+        "You are an ATS analyst that works across all industries. Return strict JSON only and keep your scoring practical."
+    },
+    {
+      role: "user",
+      content: buildAnalysisPrompt({ jobDescription, resumeText, existingKeywords })
+    }
+  ]);
+
+  const analysis = await parseAnalysisResponse(rawResponse);
+
+  if (!analysis.keywords.length) {
+    analysis.keywords = existingKeywords?.length ? normalizeList(existingKeywords) : [];
+  }
+
+  return analysis;
 }

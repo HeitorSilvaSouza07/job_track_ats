@@ -7,5 +7,8 @@ type OptimizeResumeInput = {
 };
 
 export async function optimizeResume(input: OptimizeResumeInput): Promise<string> {
-  return optimizeResumeWithAI(input);
+  return optimizeResumeWithAI({
+    ...input,
+    keywords: input.keywords
+  });
 }

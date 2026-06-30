@@ -22,7 +22,11 @@ export async function POST(request: Request) {
       keywords: resume.job.keywords
     });
 
-    const optimizedAnalysis = analyzeATS(resume.job.description, optimizedContent);
+    const optimizedAnalysis = await analyzeATS(
+      resume.job.description,
+      optimizedContent,
+      resume.job.keywords
+    );
     const updatedResume = await updateOptimizedResume(resume.id, optimizedContent, optimizedAnalysis.score);
 
     return NextResponse.json({

@@ -7,7 +7,13 @@ import {
   RelationId,
   PrimaryGeneratedColumn
 } from "typeorm";
-import { Job } from "@/entities/Job";
+
+type JobRelation = {
+  id: string;
+  description: string;
+  keywords: string[];
+  createdAt: Date;
+};
 
 @Entity({ name: "resume" })
 export class Resume {
@@ -26,9 +32,9 @@ export class Resume {
   @Column({ name: "ats_score", type: "double precision", default: 0 })
   atsScore!: number;
 
-  @ManyToOne(() => Job, (job) => job.resumes, { onDelete: "CASCADE", eager: true })
+  @ManyToOne("Job", "resumes", { onDelete: "CASCADE", eager: true })
   @JoinColumn({ name: "job_id" })
-  job!: Job;
+  job!: JobRelation;
 
   @RelationId((resume: Resume) => resume.job)
   jobId!: string;

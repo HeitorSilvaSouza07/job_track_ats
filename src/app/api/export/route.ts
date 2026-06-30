@@ -81,7 +81,7 @@ export async function POST(request: Request) {
       `Job score: ${resume.atsScore}%\n\n${content}`
     );
 
-    return new NextResponse(pdfBytes, {
+    return new NextResponse(Buffer.from(pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${resume.fileName.replace(/\.[^.]+$/, "")}-optimized.pdf"`

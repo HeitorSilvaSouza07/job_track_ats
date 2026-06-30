@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     }
 
     const originalContent = await extractResumeText(file);
-    const analysis = analyzeATS(description, originalContent);
+    const analysis = await analyzeATS(description, originalContent);
     const job = await createJob(description, analysis.keywords);
     const resume = await createResume({
       fileName: normalizeFilename(file.name),
