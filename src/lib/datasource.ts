@@ -8,14 +8,36 @@ declare global {
   var __atsDataSource: DataSource | undefined;
 }
 
-const createDataSource = () =>
-  new DataSource({
+const normalizeDatabaseUrl = (databaseUrl?: string) => {
+  if (!databaseUrl) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(databaseUrl);
+    url.searchParams.delete("sslmode");
+    url.searchParams.delete("channel_binding");
+    return url.toString();
+  } catch {
+    return databaseUrl;
+  }
+};
+
+const createDataSource = () => {
+  const databaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL);
+  const shouldUseSsl = Boolean(
+    databaseUrl?.includes("neon.tech") || databaseUrl?.includes("sslmode=")
+  );
+
+  return new DataSource({
     type: "postgres",
-    url: process.env.DATABASE_URL,
+    url: databaseUrl,
     entities: [Job, Resume],
     synchronize: false,
-    logging: false
+    logging: false,
+    ssl: shouldUseSsl ? { rejectUnauthorized: false } : false
   });
+};
 
 export const AppDataSource = globalThis.__atsDataSource ?? createDataSource();
 
