@@ -4,7 +4,6 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
-  RelationId,
   PrimaryGeneratedColumn
 } from "typeorm";
 import type { Job } from "./Job";
@@ -29,9 +28,6 @@ export class Resume {
   @ManyToOne("Job", "resumes", { onDelete: "CASCADE", eager: true })
   @JoinColumn({ name: "job_id" })
   job!: Job;
-
-  @RelationId((resume: Resume) => resume.job)
-  jobId!: string;
 
   @CreateDateColumn({ name: "created_at", type: "timestamp" })
   createdAt!: Date;
