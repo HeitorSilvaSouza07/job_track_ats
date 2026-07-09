@@ -1,45 +1,42 @@
-import { getDataSource } from "@/lib/datasource";
-import { Job } from "@/entities/Job";
+import { randomUUID } from "node:crypto";
+import { query, queryOne } from "@/lib/db";
 import { DashboardEntry } from "@/types/ats";
 
-export async function createJob(description: string, keywords: string[]): Promise<Job> {
-  const dataSource = await getDataSource();
-  const repository = dataSource.getRepository(Job);
+export type JobRecord = {
+  id: string;
+  description: string;
+  keywords: string[];
+  createdAt: Date;
+};
 
-  const job = repository.create({ description, keywords });
-  return repository.save(job);
+export async function createJob(description: string, keywords: string[]): Promise<JobRecord> {
+  const id = randomUUID();
+  const rows = await query<JobRecord>(
+    `INSERT INTO job (id, description, keywords) VALUES ($1, $2, $3) RETURNING id, description, keywords, created_at AS "createdAt"`,
+    [id, description, keywords]
+  );
+
+  return rows[0];
 }
 
-export async function findJobById(jobId: string): Promise<Job | null> {
-  const dataSource = await getDataSource();
-  return dataSource.getRepository(Job).findOne({
-    where: { id: jobId },
-    relations: { resumes: true }
-  });
+export async function findJobById(jobId: string): Promise<JobRecord | null> {
+  return queryOne<JobRecord>(
+    `SELECT id, description, keywords, created_at AS "createdAt" FROM job WHERE id = $1`,
+    [jobId]
+  );
 }
 
 export async function listDashboardEntries(): Promise<DashboardEntry[]> {
-  const dataSource = await getDataSource();
-  const jobs = await dataSource.getRepository(Job).find({
-    relations: { resumes: true },
-    order: { createdAt: "DESC" }
-  });
+  const jobs = await query<JobRecord>(
+    `SELECT id, description, keywords, created_at AS "createdAt" FROM job ORDER BY created_at DESC`
+  );
 
-  return jobs.map((job) => {
-    const orderedResumes = [...(job.resumes ?? [])].sort(
-      (left, right) => right.createdAt.getTime() - left.createdAt.getTime()
-    );
-    const bestScore = orderedResumes.length
-      ? Math.max(...orderedResumes.map((resume) => resume.atsScore))
-      : 0;
-
-    return {
-      id: job.id,
-      description: job.description,
-      score: orderedResumes[0]?.atsScore ?? 0,
-      bestScore,
-      resumeCount: orderedResumes.length,
-      createdAt: job.createdAt.toISOString()
-    };
-  });
+  return jobs.map((job) => ({
+    id: job.id,
+    description: job.description,
+    score: 0,
+    bestScore: 0,
+    resumeCount: 0,
+    createdAt: new Date(job.createdAt).toISOString()
+  }));
 }

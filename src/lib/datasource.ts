@@ -23,8 +23,28 @@ const normalizeDatabaseUrl = (databaseUrl?: string) => {
   }
 };
 
+const isPostgresDatabaseUrl = (databaseUrl?: string) => {
+  if (!databaseUrl) {
+    return false;
+  }
+
+  try {
+    const url = new URL(databaseUrl);
+    return url.protocol === "postgres:" || url.protocol === "postgresql:";
+  } catch {
+    return false;
+  }
+};
+
 const createDataSource = () => {
   const databaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL);
+
+  if (!databaseUrl || !isPostgresDatabaseUrl(databaseUrl)) {
+    throw new Error(
+      "DATABASE_URL must point to a PostgreSQL database (Neon). This app does not use local persistence."
+    );
+  }
+
   const shouldUseSsl = Boolean(
     databaseUrl?.includes("neon.tech") || databaseUrl?.includes("sslmode=")
   );
@@ -47,7 +67,7 @@ if (process.env.NODE_ENV !== "production") {
 
 export async function getDataSource(): Promise<DataSource> {
   if (!process.env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is required");
+    throw new Error("DATABASE_URL is required. Configure your Neon PostgreSQL connection string.");
   }
 
   if (!AppDataSource.isInitialized) {
