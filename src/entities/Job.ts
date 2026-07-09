@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 import type { Resume } from "./Resume";
 
 @Entity({ name: "job" })
@@ -12,7 +12,7 @@ export class Job {
   @Column({ type: "text", array: true, default: () => "'{}'" })
   keywords!: string[];
 
-  @CreateDateColumn({ name: "created_at", type: "timestamp" })
+  @Column({ name: "created_at", type: "timestamp" })
   createdAt!: Date;
 
   @OneToMany("Resume", "job")
