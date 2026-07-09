@@ -14,13 +14,36 @@ function isDocx(file: File): boolean {
   );
 }
 
+import { PdfReader } from "pdfreader";
+
+function extractPdfText(buffer: Buffer): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const rows: string[] = [];
+    const reader = new PdfReader();
+
+    reader.parseBuffer(buffer, (err, item) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+
+      if (!item) {
+        resolve(rows.join("\n").trim());
+        return;
+      }
+
+      if (item.text) {
+        rows.push(item.text);
+      }
+    });
+  });
+}
+
 export async function extractResumeText(file: File): Promise<string> {
   const buffer = await readFileBuffer(file);
 
   if (isPdf(file)) {
-    const pdfParse = (await import("pdf-parse")).default;
-    const parsed = await pdfParse(buffer);
-    return String(parsed.text ?? "").trim();
+    return extractPdfText(buffer);
   }
 
   if (isDocx(file)) {

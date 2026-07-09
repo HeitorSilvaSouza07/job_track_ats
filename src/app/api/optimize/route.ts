@@ -16,6 +16,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "Curriculo nao encontrado." }, { status: 404 });
     }
 
+    if (!resume.job) {
+      return NextResponse.json({ message: "Curriculo sem informacoes de vaga associadas." }, { status: 400 });
+    }
+
     const optimizedContent = await optimizeResume({
       jobDescription: resume.job.description,
       resumeText: resume.originalContent,
