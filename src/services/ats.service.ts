@@ -2,11 +2,11 @@ import { z } from "zod";
 import { createGroqChatCompletion } from "@/lib/groq";
 
 const atsAnalysisSchema = z.object({
-  keywords: z.array(z.string().min(2)).min(1),
+  keywords: z.array(z.string().min(1)).min(1),
   matchedKeywords: z.array(z.string()),
   missingKeywords: z.array(z.string()),
   score: z.number().min(0).max(100),
-  summary: z.string().optional()
+  summary: z.string().nullable().optional()
 });
 
 type AtsAnalysisInput = {
@@ -82,7 +82,13 @@ function buildAnalysisPrompt(input: AtsAnalysisInput): string {
 
 async function parseAnalysisResponse(raw: string): Promise<AtsAnalysisResult> {
   const json = extractJsonBlock(raw);
-  const parsed = atsAnalysisSchema.parse(JSON.parse(json));
+  const data = JSON.parse(json);
+
+  if (typeof data.score === "string") {
+    data.score = Number(data.score);
+  }
+
+  const parsed = atsAnalysisSchema.parse(data);
 
   return {
     keywords: normalizeList(parsed.keywords),
@@ -112,7 +118,7 @@ export async function extractKeywords(jobDescription: string): Promise<string[]>
     }
   ]);
 
-  const parsed = z.object({ keywords: z.array(z.string().min(2)).min(1) }).parse(JSON.parse(extractJsonBlock(response)));
+  const parsed = z.object({ keywords: z.array(z.string().min(1)).min(1) }).parse(JSON.parse(extractJsonBlock(response)));
   return normalizeList(parsed.keywords);
 }
 
